@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transacoes - Controle de Gastos</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="logo">Gastos</div>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/transactions" class="active">Transacoes</a>
+      <a href="/upload">Importar PDF</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <div class="page-header">
+      <h1>Transacoes <span class="count">({{ total }})</span></h1>
+      <a href="/upload" class="btn">+ Importar PDF</a>
+    </div>
+
+    <form method="get" action="/transactions" class="filters">
+      <select name="month">
+        <option value="">Todos os meses</option>
+        {% for m in months %}
+        <option value="{{ m }}" {% if m == month %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+      <select name="category">
+        <option value="">Todas as categorias</option>
+        {% for c in categories %}
+        <option value="{{ c }}" {% if c == category %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn">Filtrar</button>
+      {% if month or category %}
+      <a href="/transactions" class="btn btn-outline">Limpar</a>
+      {% endif %}
+    </form>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Descricao</th>
+            <th>Valor</th>
+            <th>Categoria</th>
+            <th style="width:40px"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in transactions %}
+          <tr id="row-{{ t.id }}">
+            <td class="nowrap">{{ t.date[8:10] }}/{{ t.date[5:7] }}/{{ t.date[:4] }}</td>
+            <td class="desc" title="{{ t.description }}">{{ t.description }}</td>
+            <td class="amount {% if t.amount < 0 %}expense{% else %}income{% endif %} nowrap">
+              {% if t.amount < 0 %}-{% endif %}R$ {{ "%.2f"|format(t.amount|abs) }}
+            </td>
+            <td>
+              <select class="cat-select" data-id="{{ t.id }}" onchange="updateCategory(this)">
+                {% for c in categories %}
+                <option value="{{ c }}" {% if c == t.category %}selected{% endif %}>{{ c }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td>
+              <button class="btn-del" onclick="deleteTransaction({{ t.id }})" title="Remover">x</button>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="empty">
+              Nenhuma transacao encontrada.
+              {% if not month and not category %}
+              <a href="/upload">Importe um extrato PDF</a> para comecar.
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if pages > 1 %}
+    <div class="pagination">
+      {% if page > 1 %}
+      <a href="?month={{ month }}&category={{ category }}&page={{ page - 1 }}">&laquo;</a>
+      {% endif %}
+
+      {% for p in range(1, pages + 1) %}
+        {% if p == page %}
+        <a href="?month={{ month }}&category={{ category }}&page={{ p }}" class="active">{{ p }}</a>
+        {% elif p == 1 or p == pages or (p >= page - 2 and p <= page + 2) %}
+        <a href="?month={{ month }}&category={{ category }}&page={{ p }}">{{ p }}</a>
+        {% elif p == page - 3 or p == page + 3 %}
+        <span class="pagination-ellipsis">...</span>
+        {% endif %}
+      {% endfor %}
+
+      {% if page < pages %}
+      <a href="?month={{ month }}&category={{ category }}&page={{ page + 1 }}">&raquo;</a>
+      {% endif %}
+    </div>
+    <p class="pagination-info">
+      Pagina {{ page }} de {{ pages }} &mdash; {{ total }} transacoes no total
+    </p>
+    {% endif %}
+  </main>
+
+  <div id="toast" class="toast" style="display:none"></div>
+
+  <script>
+    async function updateCategory(sel) {
+      const id = sel.dataset.id;
+      const category = sel.value;
+      try {
+        const res = await fetch(`/transactions/${id}/category`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ category: category })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('Categoria atualizada: ' + category, 'success');
+        } else {
+          showToast('Erro ao atualizar categoria', 'error');
+        }
+      } catch (e) {
+        showToast('Erro de conexao', 'error');
+      }
+    }
+
+    async function deleteTransaction(id) {
+      if (!confirm('Remover esta transacao?')) return;
+      try {
+        const res = await fetch(`/transactions/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+          const row = document.getElementById('row-' + id);
+          row.style.transition = 'opacity 0.3s';
+          row.style.opacity = '0';
+          setTimeout(() => row.remove(), 300);
+          showToast('Transacao removida', 'success');
+        } else {
+          showToast('Erro ao remover transacao', 'error');
+        }
+      } catch (e) {
+        showToast('Erro de conexao', 'error');
+      }
+    }
+
+    function showToast(msg, type) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.className = 'toast ' + type;
+      toast.style.display = 'block';
+      setTimeout(() => { toast.style.display = 'none'; }, 2800);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Importar Extrato - Controle de Gastos</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="logo">Gastos</div>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/transactions">Transacoes</a>
+      <a href="/upload" class="active">Importar PDF</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <div class="page-header">
+      <h1>Importar Extrato Bancario</h1>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div class="flash-messages">
+        {% for cat, msg in messages %}
+        <div class="alert {{ cat }}">{{ msg }}</div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="upload-box">
+      <form method="post" enctype="multipart/form-data" action="/upload" id="uploadForm">
+        <div class="drop-area" id="dropArea">
+          <div class="drop-icon">PDF</div>
+          <p class="drop-main">Arraste o PDF do extrato bancario aqui</p>
+          <p class="drop-sub">ou</p>
+          <label class="btn" for="fileInput">Escolher arquivo</label>
+          <input type="file" id="fileInput" name="file" accept=".pdf" style="display:none" onchange="showFilename(this)">
+          <p class="filename" id="filenameDisplay"></p>
+        </div>
+
+        <div id="progressWrap" class="progress-wrap" style="display:none">
+          <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+          <p class="progress-label">Processando...</p>
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="submitBtn" disabled>
+          Importar Transacoes
+        </button>
+      </form>
+
+      <div class="tips">
+        <h3>Informacoes</h3>
+        <ul>
+          <li>Exporte o extrato do seu banco em formato PDF</li>
+          <li>Bancos suportados: Nubank, Itau, Bradesco, Banco do Brasil, Caixa, Santander e outros</li>
+          <li>Transacoes duplicadas sao ignoradas automaticamente</li>
+          <li>Apos importar, voce pode ajustar as categorias na tela de Transacoes</li>
+          <li>Tamanho maximo do arquivo: 16 MB</li>
+        </ul>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const dropArea = document.getElementById('dropArea');
+    const fileInput = document.getElementById('fileInput');
+    const submitBtn = document.getElementById('submitBtn');
+    const filenameDisplay = document.getElementById('filenameDisplay');
+
+    function showFilename(input) {
+      const name = input.files[0] ? input.files[0].name : '';
+      filenameDisplay.textContent = name;
+      submitBtn.disabled = !name;
+      if (name) {
+        dropArea.classList.add('has-file');
+      } else {
+        dropArea.classList.remove('has-file');
+      }
+    }
+
+    dropArea.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      dropArea.classList.add('drag-over');
+    });
+
+    dropArea.addEventListener('dragleave', function() {
+      dropArea.classList.remove('drag-over');
+    });
+
+    dropArea.addEventListener('drop', function(e) {
+      e.preventDefault();
+      dropArea.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file && file.name.toLowerCase().endsWith('.pdf')) {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        fileInput.files = dt.files;
+        showFilename(fileInput);
+      } else if (file) {
+        alert('Por favor, selecione apenas arquivos PDF.');
+      }
+    });
+
+    dropArea.addEventListener('click', function(e) {
+      if (e.target !== fileInput && !e.target.classList.contains('btn')) {
+        fileInput.click();
+      }
+    });
+
+    document.getElementById('uploadForm').addEventListener('submit', function() {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Enviando...';
+      document.getElementById('progressWrap').style.display = 'block';
+      let w = 0;
+      const fill = document.getElementById('progressFill');
+      const interval = setInterval(function() {
+        w = Math.min(w + Math.random() * 15, 90);
+        fill.style.width = w + '%';
+        if (w >= 90) clearInterval(interval);
+      }, 300);
+    });
+  </script>
+</body>
+</html>

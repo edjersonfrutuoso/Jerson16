@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - Controle de Gastos</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="logo">Gastos</div>
+    <nav>
+      <a href="/" class="active">Dashboard</a>
+      <a href="/transactions">Transacoes</a>
+      <a href="/upload">Importar PDF</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <div class="page-header">
+      <h1>Dashboard</h1>
+      <div class="month-nav">
+        <a class="btn btn-outline" id="prevMonth" href="#">&laquo;</a>
+        <select name="month" id="monthSelect" class="month-select">
+          {% for m in months %}
+          <option value="{{ m }}" {% if m == month %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+        <a class="btn btn-outline" id="nextMonth" href="#">&raquo;</a>
+      </div>
+    </div>
+
+    <div class="cards" id="summaryCards">
+      <div class="card red">
+        <span class="label">Total de Gastos</span>
+        <span class="value" id="cardExpenses">R$ --</span>
+      </div>
+      <div class="card green">
+        <span class="label">Total de Receitas</span>
+        <span class="value" id="cardIncome">R$ --</span>
+      </div>
+      <div class="card blue" id="cardBalanceBox">
+        <span class="label">Saldo do Mes</span>
+        <span class="value" id="cardBalance">R$ --</span>
+      </div>
+    </div>
+
+    <div class="charts-row">
+      <div class="chart-box">
+        <h2>Gastos por Categoria</h2>
+        <div id="donutWrap" style="position:relative;height:260px;">
+          <canvas id="donutChart"></canvas>
+          <p class="empty" id="donutEmpty" style="display:none">Sem dados para este mes.</p>
+        </div>
+      </div>
+
+      <div class="chart-box">
+        <h2>Gastos Diarios</h2>
+        <div id="barWrap" style="position:relative;height:260px;">
+          <canvas id="barChart"></canvas>
+          <p class="empty" id="barEmpty" style="display:none">Sem dados para este mes.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="top5-box">
+      <h2>Top 5 Maiores Despesas</h2>
+      <div id="top5Content">
+        <p class="empty">Carregando...</p>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const COLORS = ['#6366f1','#f59e0b','#10b981','#ef4444','#3b82f6','#ec4899','#8b5cf6','#14b8a6'];
+    let donutInst = null;
+    let barInst = null;
+    let currentMonth = "{{ month }}";
+    const months = {{ months | tojson }};
+
+    function fmtBRL(val) {
+      return 'R$ ' + val.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    }
+
+    function fmtDate(d) {
+      return d.slice(8,10) + '/' + d.slice(5,7) + '/' + d.slice(0,4);
+    }
+
+    async function loadSummary(month) {
+      const res = await fetch('/api/summary?month=' + month);
+      const data = await res.json();
+
+      document.getElementById('cardExpenses').textContent = fmtBRL(data.total_expenses);
+      document.getElementById('cardIncome').textContent = fmtBRL(data.total_income);
+      document.getElementById('cardBalance').textContent = fmtBRL(data.balance);
+      const balBox = document.getElementById('cardBalanceBox');
+      balBox.className = 'card ' + (data.balance >= 0 ? 'blue' : 'red');
+
+      const catLabels = data.by_category.map(x => x.category);
+      const catValues = data.by_category.map(x => x.total);
+      const donutCanvas = document.getElementById('donutChart');
+      const donutEmpty = document.getElementById('donutEmpty');
+      if (catValues.length === 0) {
+        donutCanvas.style.display = 'none';
+        donutEmpty.style.display = 'block';
+      } else {
+        donutCanvas.style.display = 'block';
+        donutEmpty.style.display = 'none';
+        if (donutInst) donutInst.destroy();
+        donutInst = new Chart(donutCanvas, {
+          type: 'doughnut',
+          data: {
+            labels: catLabels,
+            datasets: [{ data: catValues, backgroundColor: COLORS, borderWidth: 0 }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: { color: '#e2e8f0', font: { size: 12 }, padding: 12 }
+              }
+            },
+            cutout: '65%'
+          }
+        });
+      }
+
+      const dayLabels = data.daily.map(x => x.date.slice(8) + '/' + x.date.slice(5,7));
+      const dayValues = data.daily.map(x => x.total);
+      const barCanvas = document.getElementById('barChart');
+      const barEmpty = document.getElementById('barEmpty');
+      if (dayValues.length === 0) {
+        barCanvas.style.display = 'none';
+        barEmpty.style.display = 'block';
+      } else {
+        barCanvas.style.display = 'block';
+        barEmpty.style.display = 'none';
+        if (barInst) barInst.destroy();
+        barInst = new Chart(barCanvas, {
+          type: 'bar',
+          data: {
+            labels: dayLabels,
+            datasets: [{
+              label: 'Gastos (R$)',
+              data: dayValues,
+              backgroundColor: '#6366f1',
+              borderRadius: 4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+              y: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } }
+            }
+          }
+        });
+      }
+
+      await loadTop5(month);
+    }
+
+    async function loadTop5(month) {
+      const sumRes = await fetch('/api/summary?month=' + month);
+      const data = await sumRes.json();
+      const top5Container = document.getElementById('top5Content');
+      if (!data.by_category || data.by_category.length === 0) {
+        top5Container.innerHTML = '<p class="empty">Nenhuma despesa registrada.</p>';
+        return;
+      }
+      const top5 = data.by_category.slice(0, 5);
+      let html = '<table><thead><tr><th>Categoria</th><th>Total</th></tr></thead><tbody>';
+      top5.forEach(item => {
+        html += `<tr>
+          <td><span class="badge">${item.category}</span></td>
+          <td class="amount expense">${fmtBRL(item.total)}</td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+      top5Container.innerHTML = html;
+    }
+
+    function navigateMonth(delta) {
+      const idx = months.indexOf(currentMonth);
+      if (idx === -1) return;
+      const newIdx = idx - delta;
+      if (newIdx < 0 || newIdx >= months.length) return;
+      currentMonth = months[newIdx];
+      document.getElementById('monthSelect').value = currentMonth;
+      history.pushState(null, '', '/?month=' + currentMonth);
+      loadSummary(currentMonth);
+    }
+
+    document.getElementById('monthSelect').addEventListener('change', function() {
+      currentMonth = this.value;
+      history.pushState(null, '', '/?month=' + currentMonth);
+      loadSummary(currentMonth);
+    });
+
+    document.getElementById('prevMonth').addEventListener('click', function(e) {
+      e.preventDefault();
+      navigateMonth(-1);
+    });
+
+    document.getElementById('nextMonth').addEventListener('click', function(e) {
+      e.preventDefault();
+      navigateMonth(1);
+    });
+
+    loadSummary(currentMonth);
+  </script>
+</body>
+</html>
