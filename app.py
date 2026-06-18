@@ -44,8 +44,12 @@ def upload_file():
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], f.filename)
     f.save(filepath)
     transactions = parse_pdf(filepath)
+    if not transactions:
+        flash('Nenhuma transação encontrada no PDF. Verifique se o arquivo é um extrato bancário válido.', 'error')
+        return redirect(url_for('upload_page'))
     conn = get_db()
     inserted = 0
+    duplicates = 0
     for t in transactions:
         existing = conn.execute(
             'SELECT id FROM transactions WHERE date=? AND description=? AND amount=?',
@@ -58,9 +62,17 @@ def upload_file():
                 (t['date'], t['description'], t['amount'], category, f.filename, datetime.now().isoformat())
             )
             inserted += 1
+        else:
+            duplicates += 1
     conn.commit()
     conn.close()
-    flash(f'{inserted} transações importadas com sucesso!', 'success')
+    if inserted > 0:
+        msg = f'{inserted} transações importadas com sucesso!'
+        if duplicates:
+            msg += f' ({duplicates} já existiam e foram ignoradas.)'
+        flash(msg, 'success')
+    else:
+        flash(f'Todas as {duplicates} transações do PDF já estavam no banco de dados.', 'warning')
     return redirect(url_for('transactions'))
 
 @app.route('/transactions')
@@ -106,7 +118,7 @@ def update_category(id):
 
 @app.route('/transactions/<int:id>', methods=['DELETE'])
 def delete_transaction(id):
-    conn = get_db()
+    conn = get_db()    
     conn.execute('DELETE FROM transactions WHERE id=?', (id,))
     conn.commit()
     conn.close()
@@ -138,6 +150,20 @@ def api_summary():
         'by_category': by_category,
         'daily': daily_list
     })
+
+@app.route('/debug/parse', methods=['POST'])
+def debug_parse():
+    if 'file' not in request.files:
+        return jsonify({'error': 'no file'})
+    f = request.files['file']
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], f.filename)
+    f.save(filepath)
+    try:
+        results = parse_pdf(filepath)
+        return jsonify({'count': len(results), 'sample': results[:3]})
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
 
 if __name__ == '__main__':
     app.run(debug=True)
