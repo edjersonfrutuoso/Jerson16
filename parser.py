@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 BR_DATE_RE = re.compile(r'(\d{2}/\d{2}/\d{4}|\d{2}/\d{2}/\d{2})')
 BR_AMOUNT_RE = re.compile(r'(-?\d{1,3}(?:\.\d{3})*,\d{2})')
 
-RAIF_DATE_RE = re.compile(r'(\d{1,2})\. \s*(\d{1,2})\.\s*(\d{4})')
+RAIF_DATE_RE = re.compile(r'(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})')
 RAIF_DATE_LINE_RE = re.compile(r'^\d{1,2}\.\s*\d{1,2}\.\s*\d{4}')
 RAIF_AMOUNT_END_RE = re.compile(r'(-?\d{1,3}(?: \d{3})*,\d{2})\s*$')
 
